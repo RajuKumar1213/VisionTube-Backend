@@ -6,13 +6,6 @@ const asyncHandler = (requestHandler) => {
 
 export default asyncHandler;
 
-
-
-
-
-
-
-
 /// WRITE FOR TRYCATCH HANDLER
 
 // const asyncHandler = (fn) => async (req, res, next) => {
