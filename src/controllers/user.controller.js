@@ -225,8 +225,9 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       throw new ApiError(401, 'Refresh token in expired or used.');
     }
 
-    const { accessToken, newRefreshToken } =
-      await generateAccessAndRefreshToken(user._id);
+    const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
+      user._id
+    );
 
     const options = {
       httpOnly: true,
@@ -236,11 +237,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
     return res
       .status(200)
       .cookie('accessToken', accessToken, options)
-      .cookie('refreshToken', newRefreshToken, options)
+      .cookie('refreshToken', refreshToken, options)
       .json(
         new ApiResponse(
           200,
-          { accessToken, accessToken: newRefreshToken },
+          { accessToken, refreshToken },
           'Access token refreshed successfully'
         )
       );
