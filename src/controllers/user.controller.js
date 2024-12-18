@@ -180,8 +180,11 @@ const loginUser = asyncHandler(async (req, res) => {
 const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(
     req.user._id,
+    // {
+    //   $set: { refreshToken: undefined },
+    // },
     {
-      $set: { refreshToken: undefined },
+      $unset: { refreshToken: 1 },
     },
     {
       new: true,
@@ -253,6 +256,10 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 const updatePassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
 
+  if (oldPassword == newPassword) {
+    throw new ApiError(400, 'Old and new password must be different.');
+  }
+
   const user = await User.findById(req.user?._id);
   // comparing password is correct or not
   const isPasswordCorrect = await user.isPasswordCorrect(oldPassword);
@@ -261,19 +268,19 @@ const updatePassword = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'Invalid old password.');
   }
 
-  user.password = password;
+  user.password = newPassword;
   user.save({ validateBeforeSave: false });
 
   return res
     .status(200)
-    .json(ApiResponse(200, {}, 'Password updated successfully.'));
+    .json(new ApiResponse(200, {}, 'Password updated successfully.'));
 });
 
 /// GET CURRENT USER**
 const getCurrentUser = asyncHandler(async (req, res) => {
   return res
     .status(200)
-    .json(ApiResponse(200, req.user, 'current user fetched successfully'));
+    .json(new ApiResponse(200, req.user, 'current user fetched successfully'));
 });
 
 // UPDATE USER**
@@ -297,7 +304,9 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(ApiResponse(200, user, 'User accout details updated successfully.'));
+    .json(
+      new ApiResponse(200, user, 'User accout details updated successfully.')
+    );
 });
 
 // UPDATE PROFILE PICTURE**
@@ -325,7 +334,7 @@ const updateAvatar = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(ApiResponse(200, user, 'Avatar updated successfully.'));
+    .json(new ApiResponse(200, user, 'Avatar updated successfully.'));
 });
 
 // UPDATE COVER IMAGE**
@@ -337,7 +346,7 @@ const updateCoverImage = asyncHandler(async (req, res) => {
   }
 
   const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-  if (!coverImage.url) {
+  if (!coverImage?.url) {
     throw new ApiError(500, 'Error while uploading cover image.');
   }
 
@@ -353,7 +362,7 @@ const updateCoverImage = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(ApiResponse(200, user, 'Cover Image updated successfully.'));
+    .json(new ApiResponse(200, user, 'Cover Image updated successfully.'));
 });
 
 // GET CHANNEL PROFILE DETAILS**
@@ -397,14 +406,12 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
       $addFields: {
         subscribersCount: { $size: '$subscriber' },
         subscribedToCount: { $size: '$subscribedTo' },
-        // checking weather user is subscribed other channel or not
+        // checking weather user is subscribed by currently logged in user or not
         isSubscribed: {
           $cond: {
-            if: {
-              $in: [req.user?._id, '$subscribers.subscriber'],
-              then: true,
-              else: false,
-            },
+            if: { $in: [req.user?._id, ['$subscribers.subscriber']] },
+            then: true,
+            else: false,
           },
         },
       },
@@ -425,7 +432,7 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
     },
   ]);
 
-  if (!channel?.length()) {
+  if (!channel?.length) {
     throw new ApiError(404, "Channel doesn't exists");
   }
 
