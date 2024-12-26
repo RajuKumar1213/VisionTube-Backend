@@ -64,15 +64,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
         subscribedToCount: { $size: { $ifNull: ['$subscriberTo', []] } },
         totalVideos: { $size: { $ifNull: ['$videos', []] } },
         totalLikes: { $size: '$likes' },
-        totalViews: {
-          $sum: {
-            $map: {
-              input: { $ifNull: ['$vidoes', []] },
-              as: 'video',
-              in: '$$video.views',
-            },
-          },
-        },
+        totalViews: { $sum: '$videos.views' },
       },
     },
     {
@@ -173,11 +165,7 @@ const getChannelVideos = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(
-        200,
-        response,
-        'Channel videos fetched successfully.'
-      )
+      new ApiResponse(200, response, 'Channel videos fetched successfully.')
     );
 });
 

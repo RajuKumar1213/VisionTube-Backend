@@ -9,6 +9,7 @@ import {
   togglePublishStatus,
   updateThumbnail,
   updateVideoTitleAndDesc,
+  increatementViewCount,
 } from '../controllers/video.controller.js';
 
 const router = Router();
@@ -37,4 +38,6 @@ router
 
 router.route('/delete/:videoId').delete(verifyJWT, deleteVideo);
 router.route('/toggle-publish/:videoId').patch(verifyJWT, togglePublishStatus);
+
+router.route('/:videoId/views').patch(verifyJWT, increatementViewCount);
 export default router;

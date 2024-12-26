@@ -428,8 +428,6 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
         subscribedToCount: 1,
         isSubscribed: 1,
         email: 1,
-        // subscriber: 1,
-        // subscribedTo: 1,
       },
     },
   ]);

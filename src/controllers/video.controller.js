@@ -356,6 +356,41 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
     );
 });
 
+const increatementViewCount = asyncHandler(async (req, res) => {
+  const { videoId } = req.params;
+
+  if (!isValidObjectId(videoId) || !videoId) {
+    throw new ApiError(400, 'Invalid video id or missing video id');
+  }
+
+  // find the video
+
+  const video = await Video.findById(videoId);
+  if (!video) {
+    throw new ApiError(500, 'Video not found');
+  }
+
+  if (video.viewedBy.includes(req.user._id)) {
+    return res
+      .status(200)
+      .json(new ApiResponse(200, {}, 'You have already viewed this video'));
+  }
+
+  video.viewedBy.push(req.user._id);
+  video.views += 1;
+  const updatedVideo = await video.save();
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        updatedVideo.views,
+        'Video view count updated successfully'
+      )
+    );
+});
+
 export {
   getAllVideos,
   publishAVideo,
@@ -364,4 +399,5 @@ export {
   deleteVideo,
   togglePublishStatus,
   updateThumbnail,
+  increatementViewCount,
 };
