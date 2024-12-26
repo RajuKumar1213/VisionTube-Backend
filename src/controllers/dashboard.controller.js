@@ -45,6 +45,9 @@ const getChannelStats = asyncHandler(async (req, res) => {
         let: { videoIds: '$videos._id' },
         pipeline: [
           {
+            $unwind: '$video', // Unwind the video array to check individual IDs,
+          },
+          {
             $match: {
               $expr: {
                 $in: ['$video', '$$videoIds'],
@@ -97,7 +100,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
     .json(
       new ApiResponse(
         200,
-        dashBoardDetails,
+        dashBoardDetails[0],
         'Dashboard details fetched successfully.'
       )
     );
@@ -170,7 +173,11 @@ const getChannelVideos = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .json(
-      new ApiResponse(200, response, 'Channel videos fetched successfully.')
+      new ApiResponse(
+        200,
+        response,
+        'Channel videos fetched successfully.'
+      )
     );
 });
 
