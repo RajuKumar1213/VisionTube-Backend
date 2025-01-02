@@ -192,6 +192,13 @@ const getVideoById = asyncHandler(async (req, res) => {
         as: 'owner',
 
         pipeline: [
+          {
+            $addFields: {
+              owner: {
+                $first: '$owner',
+              },
+            },
+          },
           // adding user subscriber count
           {
             $lookup: {
@@ -226,6 +233,13 @@ const getVideoById = asyncHandler(async (req, res) => {
         ],
       },
     },
+    {
+      $addFields: {
+        owner: {
+          $first: '$owner',
+        },
+      },
+    },
   ]);
 
   if (!videoById) {
@@ -234,7 +248,7 @@ const getVideoById = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .json(new ApiResponse(200, videoById, 'Video fetched successfully'));
+    .json(new ApiResponse(200, videoById[0], 'Video fetched successfully'));
 });
 
 const updateVideoTitleAndDesc = asyncHandler(async (req, res) => {

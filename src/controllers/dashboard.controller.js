@@ -69,6 +69,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
     },
     {
       $project: {
+        _id: 1,
         username: 1,
         fullName: 1,
         email: 1,
@@ -100,7 +101,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
 
 const getChannelVideos = asyncHandler(async (req, res) => {
   // TODO: Get all the videos uploaded by the channel
-  const { page = 1, limit = 20 } = req.query;
+  const { page = 1, limit = 20, sortBy, sortType = 'desc' } = req.query;
   const currentPage = parseInt(page, 10);
   const pageSize = parseInt(limit, 10);
 
@@ -112,6 +113,8 @@ const getChannelVideos = asyncHandler(async (req, res) => {
     },
     {
       $project: {
+        duration: 1,
+        description: 1,
         title: 1,
         thumbnail: 1,
         videoFile: 1,
@@ -132,6 +135,11 @@ const getChannelVideos = asyncHandler(async (req, res) => {
           },
           {
             $limit: pageSize,
+          },
+          {
+            $sort: {
+              [sortBy]: sortType === 'desc' ? -1 : 1 || 'asce' ? 1 : -1,
+            },
           },
         ],
       },
