@@ -94,7 +94,7 @@ const registerUser = asyncHandler(async (req, res) => {
     coverImage: coverImage?.url || '',
     email,
     password,
-    username: username.toLowerCase(),
+    username: `@${username}`,
   });
 
   // checking if user created or not ,and deselecting password and refreshToken field
@@ -416,6 +416,14 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
     // state 3 : for getting the user subscribedTo details
     {
       $lookup: {
+        from: 'videos',
+        localField: '_id',
+        foreignField: 'owner',
+        as: 'videos',
+      },
+    },
+    {
+      $lookup: {
         from: 'subscriptions',
         localField: '_id',
         foreignField: 'subscriber',
@@ -436,6 +444,7 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
             else: false,
           },
         },
+        totalVideos: { $size: '$videos' },
       },
     },
 
@@ -450,6 +459,8 @@ const getChannelProfileDetails = asyncHandler(async (req, res) => {
         subscribedToCount: 1,
         isSubscribed: 1,
         email: 1,
+        aboutChannel: 1,
+        totalVideos: 1,
       },
     },
   ]);
@@ -526,6 +537,52 @@ const getWatchHistory = asyncHandler(async (req, res) => {
     );
 });
 
+const makeWatchHistory = asyncHandler(async (req, res) => {
+  const { videoId } = req.body;
+
+  if (!videoId) {
+    throw new ApiError(400, 'Video id is required');
+  }
+
+  const user = await User.findByIdAndUpdate(
+    req.user._id,
+    {
+      $addToSet: {
+        watchHistory: videoId,
+      },
+    },
+    {
+      new: true,
+    }
+  );
+
+  if (!user) {
+    throw new ApiError(500, 'Error while updating watch history');
+  }
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, user, 'Watch history updated successfully'));
+});
+
+// this is one time update function for adding prefix to add the usernames.
+
+// const updateAllusername = asyncHandler(async (req, res) => {
+//   await User.updateMany(
+//     { username: { $regex: /^[^@]/ } }, // Match usernames that don't start with "@"
+//     [
+//       {
+//         $set: {
+//           username: { $concat: ['@', '$username'] }, // Add "@" prefix to the username
+//         },
+//       },
+//     ]
+//   );
+
+//   console.log('Usernames updated successfully!');
+//   res.status(200).json({ message: 'Usernames updated successfully!' });
+// });
+
 export {
   registerUser,
   loginUser,
@@ -539,4 +596,6 @@ export {
   getChannelProfileDetails,
   getWatchHistory,
   forgetPassword,
+  makeWatchHistory,
+  // updateAllusername,
 };

@@ -211,26 +211,17 @@ const getVideoById = asyncHandler(async (req, res) => {
           {
             $addFields: {
               subscriberCount: { $size: '$subscribers' },
-              isSubscribed: {
-                $cond: {
-                  if: { $in: [req.user?._id, ['$subscribers.subscriber']] },
-                  then: true,
-                  else: false,
-                },
-              },
-            },
-          },
-          {
-            $project: {
-              username: 1,
-              avatar: 1,
-              fullName: 1,
-              subscriber: 1,
-              subscriberCount: 1,
-              isSubscribed: 1,
             },
           },
         ],
+      },
+    },
+    {
+      $lookup: {
+        from: 'likes',
+        localField: '_id',
+        foreignField: 'video',
+        as: 'likes',
       },
     },
     {
@@ -238,6 +229,27 @@ const getVideoById = asyncHandler(async (req, res) => {
         owner: {
           $first: '$owner',
         },
+      },
+    },
+    {
+      $project: {
+        _id: 1,
+        title: 1,
+        description: 1,
+        duration: 1,
+        thumbnail: 1,
+        videoFile: 1,
+        views: 1,
+        createdAt: 1,
+        isPublished: 1,
+        owner: {
+          username: 1,
+          avatar: 1,
+          fullName: 1,
+          subscriberCount: 1,
+          _id: 1,
+        },
+        totalLikes: { $size: '$likes' },
       },
     },
   ]);
@@ -405,6 +417,95 @@ const increatementViewCount = asyncHandler(async (req, res) => {
     );
 });
 
+// get all videos of a channel
+
+const getAllVideosOfChannel = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 10, query, sortBy, sortType } = req.query;
+  const { channelId } = req.params;
+
+  const pipeline = [];
+
+  //stage -1 : match state
+  if (query || channelId) {
+    const matchState = {};
+    if (query) {
+      matchState.title = { $regex: query, $options: 'i' }; // case-insensitive search in title
+    }
+    if (channelId) {
+      matchState.owner = new mongoose.Types.ObjectId(channelId);
+    }
+    pipeline.push({ $match: matchState });
+  }
+
+  // stage - 2 - sort stage
+  if (sortBy) {
+    const sortState = {
+      $sort: {
+        [sortBy]: sortType === 'desc' ? -1 : 1,
+      },
+    };
+    pipeline.push(sortState);
+  }
+
+  // stage -3 : pagination stage
+  const skipStage = {
+    $skip: (page - 1) * limit, // calculate the number of documents to skip
+  };
+
+  const limitStage = {
+    $limit: parseInt(limit, 20), // limit the number of documents to display
+  };
+
+  // add lookup stage to get owner details
+  // const lookupStage = {
+  //   $lookup: {
+  //     from: 'users',
+  //     localField: 'owner',
+  //     foreignField: '_id',
+  //     as: 'owner',
+
+  //     pipeline: [
+  //       {
+  //         $project: {
+  //           username: 1,
+  //           avatar: 1,
+  //           fullName: 1,
+  //         },
+  //       },
+  //     ],
+  //   },
+  // };
+
+  // adding another stage for get the first element of owner array
+  // pipeline.push({
+  //   $addFields: {
+  //     owner: {
+  //       $first: '$owner',
+  //     },
+  //   },
+  // });
+
+  // pipeline.push(lookupStage);
+
+  pipeline.push(skipStage, limitStage);
+
+  const allVidoes = await Video.aggregate(pipeline);
+
+  if (!allVidoes) {
+    throw new ApiError(404, 'No videos found');
+  }
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        allVidoes,
+        'All videos fetched successfully according to the query'
+      )
+    );
+});
+
 export {
   getAllVideos,
   publishAVideo,
@@ -414,4 +515,5 @@ export {
   togglePublishStatus,
   updateThumbnail,
   increatementViewCount,
+  getAllVideosOfChannel,
 };

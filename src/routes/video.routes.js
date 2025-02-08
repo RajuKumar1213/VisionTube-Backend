@@ -10,6 +10,7 @@ import {
   updateThumbnail,
   updateVideoTitleAndDesc,
   increatementViewCount,
+  getAllVideosOfChannel,
 } from '../controllers/video.controller.js';
 
 const router = Router();
@@ -40,4 +41,5 @@ router.route('/delete/:videoId').delete(verifyJWT, deleteVideo);
 router.route('/toggle-publish/:videoId').patch(verifyJWT, togglePublishStatus);
 
 router.route('/:videoId/views').patch(verifyJWT, increatementViewCount);
+router.route('/my-videos/:channelId?').get(verifyJWT, getAllVideosOfChannel);
 export default router;

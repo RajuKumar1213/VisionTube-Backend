@@ -145,4 +145,28 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
     );
 });
 
-export { toggleSubscription, getUserChannelSubscribers, getSubscribedChannels };
+const getChannelIsSubscribed = asyncHandler(async (req, res) => {
+  const { channelId } = req.params;
+
+  if (!isValidObjectId(channelId)) {
+    throw new ApiError(400, 'Invalid channel id');
+  }
+
+  const isSubscribed = await Subscription.findOne({
+    subscriber: req.user?._id,
+    channel: channelId,
+  });
+
+  if (!isSubscribed) {
+    return res.status(200).json(new ApiResponse(200, false, 'Not subscribed'));
+  }
+
+  return res.status(200).json(new ApiResponse(200, true, 'Subscribed'));
+});
+
+export {
+  toggleSubscription,
+  getUserChannelSubscribers,
+  getSubscribedChannels,
+  getChannelIsSubscribed,
+};

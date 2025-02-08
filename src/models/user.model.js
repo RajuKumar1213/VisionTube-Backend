@@ -10,7 +10,7 @@ const userSchema = new Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      index: true,api
+      index: true,
     },
     email: {
       type: String,
@@ -31,6 +31,9 @@ const userSchema = new Schema(
     },
     coverImage: {
       type: String, // cloudinary url
+    },
+    aboutChannel: {
+      type: String, //
     },
     watchHistory: [
       {

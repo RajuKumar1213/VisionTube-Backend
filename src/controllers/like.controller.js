@@ -50,6 +50,11 @@ const toggleVideoLike = asyncHandler(async (req, res) => {
 
 const toggleCommentLike = asyncHandler(async (req, res) => {
   const { commentId } = req.params;
+
+  if (!isValidObjectId(commentId)) {
+    throw new ApiError(400, 'Invalid comment id');
+  }
+
   const userId = req.user?._id;
   const like = await Like.findOne({ likedBy: userId });
   if (!like) {

@@ -12,6 +12,7 @@ import {
   updateAccountDetails,
   updateAvatar,
   forgetPassword,
+  makeWatchHistory,
 } from '../controllers/user.controller.js';
 import { upload } from '../middleware/multer.middleware.js';
 import { verifyJWT } from '../middleware/auth.middleware.js';
@@ -52,5 +53,7 @@ router
 router.route('/channel/:username').get(verifyJWT, getChannelProfileDetails);
 
 router.route('/watch-history').get(verifyJWT, getWatchHistory);
+router.route('/make-watch-history').patch(verifyJWT, makeWatchHistory);
 
+// router.route('/update-username').patch(updateAllusername);
 export default router;
