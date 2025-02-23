@@ -4,7 +4,10 @@ import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
-import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import {
+  deleteFromCloudinary,
+  uploadOnCloudinary,
+} from '../utils/cloudinary.js';
 
 const getAllVideos = asyncHandler(async (req, res) => {
   const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
@@ -108,64 +111,76 @@ const publishAVideo = asyncHandler(async (req, res) => {
   // 6. check if video is created successfully or not
   // finaly return the video document in res.
 
-  if (!req.user._id) {
-    throw new ApiError(401, 'Unauthorized access');
-  }
+  try {
+    if (!req.user._id) {
+      throw new ApiError(401, 'Unauthorized access');
+    }
 
-  const { title, description } = req.body;
-  if (!(title && description)) {
-    throw new ApiError(400, 'Title and description are required');
-  }
+    const { title, description } = req.body;
+    if (!(title && description)) {
+      throw new ApiError(400, 'Title and description are required');
+    }
 
-  // checking for video file and thumbnail
-  if (!req?.files?.videoFile) {
-    throw new ApiError(400, 'Video file is required');
-  }
-  if (!req?.files?.thumbnail) {
-    throw new ApiError(400, 'Thumbnail is required');
-  }
+    // checking for video file and thumbnail
+    if (!req?.files?.videoFile) {
+      throw new ApiError(400, 'Video file is required');
+    }
+    if (!req?.files?.thumbnail) {
+      throw new ApiError(400, 'Thumbnail is required');
+    }
 
-  const videoFileLocalPath = req?.files?.videoFile[0]?.path;
-  const thumbnailLocalPath = req?.files?.thumbnail[0]?.path;
-  if (!(videoFileLocalPath && thumbnailLocalPath)) {
-    throw new ApiError(400, 'Video file and thumbnail are required');
-  }
+    const videoFileLocalPath = req?.files?.videoFile[0]?.path;
+    const thumbnailLocalPath = req?.files?.thumbnail[0]?.path;
+    if (!(videoFileLocalPath && thumbnailLocalPath)) {
+      throw new ApiError(400, 'Video file and thumbnail are required');
+    }
 
-  // uploading on cloudinary
-  const video = await uploadOnCloudinary(videoFileLocalPath);
-  if (!video) {
+    // uploading on cloudinary
+    const video = await uploadOnCloudinary(videoFileLocalPath);
+
+    if (!video) {
+      throw new ApiError(
+        500,
+        'Failed to upload video on cloudinary. Please try again'
+      );
+    }
+    // uploading thumbnail on cloudinary
+    const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
+    if (!thumbnail) {
+      throw new ApiError(
+        500,
+        'Failed to upload thumbnail on cloudinary. Please try again'
+      );
+    }
+
+    // create a new video document
+    const newVideo = await Video.create({
+      videoFile: video.secure_url,
+      thumbnail: thumbnail.secure_url,
+      videoPublicId: video.public_id,
+      thumbnailPublicId: thumbnail.public_id,
+      title: title.trim(),
+      description: description.trim(),
+      duration: video.duration,
+      owner: req.user._id,
+    });
+
+    if (!newVideo) {
+      throw new ApiError(500, 'Failed to create video. Please try again');
+    }
+
+    // return the video document
+    return res
+      .status(201)
+      .json(new ApiResponse(201, 'Video uploaded successfully', newVideo));
+  } catch (error) {
+    await deleteFromCloudinary(video?.public_id);
+    await deleteFromCloudinary(thumbnail?.public_id);
     throw new ApiError(
       500,
-      'Failed to upload video on cloudinary. Please try again'
+      'Something went wrong while uploading the video! and images are deleted from cloudinary'
     );
   }
-  // uploading thumbnail on cloudinary
-  const thumbnail = await uploadOnCloudinary(thumbnailLocalPath);
-  if (!thumbnail) {
-    throw new ApiError(
-      500,
-      'Failed to upload thumbnail on cloudinary. Please try again'
-    );
-  }
-
-  // create a new video document
-  const newVideo = await Video.create({
-    videoFile: video.url,
-    thumbnail: thumbnail.url,
-    title: title.trim(),
-    description: description.trim(),
-    duration: video.duration,
-    owner: req.user._id,
-  });
-
-  if (!newVideo) {
-    throw new ApiError(500, 'Failed to create video. Please try again');
-  }
-
-  // return the video document
-  return res
-    .status(201)
-    .json(new ApiResponse(201, 'Video uploaded successfully', newVideo));
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
@@ -336,13 +351,24 @@ const updateThumbnail = asyncHandler(async (req, res) => {
     );
 });
 
+// delete video
 const deleteVideo = asyncHandler(async (req, res) => {
   const { videoId } = req.params;
-  //TODO: delete video
+
   if (!isValidObjectId(videoId) || !videoId) {
     throw new ApiError(400, 'Invalid video id or missing video id');
   }
 
+  const video = await Video.findById(videoId);
+  if (!video) {
+    throw new ApiError(404, 'Video not found');
+  }
+
+  const { videoPublicId, thumbnailPublicId } = video;
+  await deleteFromCloudinary(videoPublicId);
+  await deleteFromCloudinary(thumbnailPublicId);
+
+  // deleting from database
   const deletedVideo = await Video.findByIdAndDelete(videoId);
 
   if (!deletedVideo) {
