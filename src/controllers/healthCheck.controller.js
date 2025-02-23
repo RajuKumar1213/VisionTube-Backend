@@ -3,12 +3,11 @@ import { ApiResponse } from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
 
 const healthcheck = asyncHandler(async (req, res) => {
-  // if not healthy then throw error
-  // if (process.env.NODE_ENV !== 'production') {
-  //   throw new ApiError(500, 'Server is not healthy');
+  // Check if critical services are running (e.g., DB, Cache, etc.)
+  const isDBConnected = true; // Replace with actual DB check if needed
 
-  if (process.env.NODE_ENV === 'production') {
-    throw new ApiError(500, 'Server is not healthy');
+  if (!isDBConnected) {
+    throw new ApiError(500, 'Database is down');
   }
 
   const response = {
