@@ -41,6 +41,9 @@ const registerUser = asyncHandler(async (req, res) => {
   // check for user creation
   // send back the response to the frontend
 
+  let avatar;
+  let coverImage;
+
   try {
     const { fullName, email, username, password } = req.body;
 
@@ -83,9 +86,10 @@ const registerUser = asyncHandler(async (req, res) => {
     }
 
     //uploading on cloudinary
-    const avatar = await uploadOnCloudinary(avatarLocalPath);
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+    avatar = await uploadOnCloudinary(avatarLocalPath);
+    coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
+    console.log(avatar);
     if (!avatar) {
       throw new ApiError(
         400,
@@ -110,6 +114,8 @@ const registerUser = asyncHandler(async (req, res) => {
     );
 
     if (!createdUser) {
+      if (avatar) deleteFromCloudinary(avatar?.public_id);
+      if (coverImage) deleteFromCloudinary(coverImage?.public_id);
       throw new ApiError(
         500,
         'Something went wrong while registering the user!'
@@ -121,12 +127,9 @@ const registerUser = asyncHandler(async (req, res) => {
       .status(201)
       .json(new ApiResponse(200, createdUser, 'User is created Successfully!'));
   } catch (error) {
-    deleteFromCloudinary(avatar?.public_id);
-    deleteFromCloudinary(coverImage?.public_id);
-    throw new ApiError(
-      500,
-      'Something went wrong while registering the user! and images are deleted from cloudinary'
-    );
+    if (avatar) deleteFromCloudinary(avatar?.public_id);
+    if (coverImage) deleteFromCloudinary(coverImage?.public_id);
+    throw error;
   }
 });
 
