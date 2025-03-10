@@ -89,7 +89,6 @@ const registerUser = asyncHandler(async (req, res) => {
     avatar = await uploadOnCloudinary(avatarLocalPath);
     coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-    console.log(avatar);
     if (!avatar) {
       throw new ApiError(
         400,
