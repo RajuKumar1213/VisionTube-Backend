@@ -56,7 +56,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
     },
   });
 
-  // Flatten Owner Array
   pipeline.push({
     $addFields: {
       owner: { $arrayElemAt: ['$owner', 0] },
