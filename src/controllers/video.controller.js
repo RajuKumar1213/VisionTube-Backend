@@ -10,93 +10,104 @@ import {
 } from '../utils/cloudinary.js';
 
 const getAllVideos = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
-  //TODO: get all videos based on query, sort, pagination
+  const {
+    limit = 10,
+    query,
+    sortBy = 'views',
+    sortType = 'desc',
+    userId,
+    lastVideoId,
+  } = req.query;
 
-  // writing mongodb aggregation pipeline
+  const limitNumber = parseInt(limit, 10);
+  const sortOrder = sortType === 'asc' ? 1 : -1;
 
+  // MongoDB aggregation pipeline
   const pipeline = [];
 
-  //stage -1 : match state
-  if (userId || query) {
-    const matchState = {};
-    if (query) {
-      matchState.title = { $regex: query, $options: 'i' }; // case-insensitive search in title
-    }
-    if (userId) {
-      matchState.owner = new mongoose.Types.ObjectId(userId);
-    }
-    pipeline.push({ $match: matchState });
+  // Match Stage (Filter by query or user ID)
+  const matchStage = {};
+  if (query) matchStage.title = { $regex: query, $options: 'i' };
+  if (userId) matchStage.owner = new mongoose.Types.ObjectId(userId);
+
+  // Cursor-based pagination (Fix for duplicate issue)
+  if (lastVideoId) {
+    matchStage._id =
+      sortOrder === -1
+        ? { $lt: new mongoose.Types.ObjectId(lastVideoId) } // Fetch older videos
+        : { $gt: new mongoose.Types.ObjectId(lastVideoId) }; // Fetch newer videos
   }
 
-  // stage - 2 - sort stage
-  if (sortBy) {
-    const sortState = {
-      $sort: {
-        [sortBy]: sortType === 'desc' ? -1 : 1,
-      },
-    };
-    pipeline.push(sortState);
-  }
+  pipeline.push({ $match: matchStage });
 
-  // stage -3 : pagination stage
-  const skipStage = {
-    $skip: (page - 1) * limit, // calculate the number of documents to skip
-  };
+  // Sort Stage (Fix duplicate issues)
+  pipeline.push({
+    $sort: { [sortBy]: sortOrder, _id: sortOrder }, // Sort by `views` and `_id`
+  });
 
-  const limitStage = {
-    $limit: parseInt(limit, 10), // limit the number of documents to display
-  };
-
-  // add lookup stage to get owner details
-  const lookupStage = {
+  // Lookup Owner Details (User Info)
+  pipeline.push({
     $lookup: {
       from: 'users',
       localField: 'owner',
       foreignField: '_id',
       as: 'owner',
-
-      pipeline: [
-        {
-          $project: {
-            username: 1,
-            avatar: 1,
-            fullName: 1,
-          },
-        },
-      ],
+      pipeline: [{ $project: { username: 1, avatar: 1, fullName: 1 } }],
     },
-  };
+  });
 
-  // adding another stage for get the first element of owner array
-  // pipeline.push({
-  //   $addFields: {
-  //     owner: {
-  //       $first: '$owner',
-  //     },
-  //   },
-  // });
+  // Flatten Owner Array
+  pipeline.push({
+    $addFields: {
+      owner: { $arrayElemAt: ['$owner', 0] },
+    },
+  });
 
-  pipeline.push(lookupStage);
+  // Pagination Limit (🔥 No `$skip` to prevent duplicate data)
+  pipeline.push({ $limit: limitNumber });
 
-  pipeline.push(skipStage, limitStage);
+  // Execute aggregation
+  const videos = await Video.aggregate(pipeline);
 
-  const allVidoes = await Video.aggregate(pipeline);
-
-  if (!allVidoes) {
-    throw new ApiError(404, 'No videos found');
-  }
-
-  return res
-    .status(200)
-    .json(
+  // Handle case when no videos are found
+  if (!videos.length) {
+    return res.status(200).json(
       new ApiResponse(
         200,
-        allVidoes,
-        'All videos fetched successfully according to the query'
+        {
+          data: [],
+          currentPage: null,
+          nextPage: null,
+          hasMore: false,
+          totalVideos: 0,
+          lastVideoId: null,
+        },
+        'No videos found'
       )
     );
+  }
+
+  // Fetch total video count for pagination info
+  const totalVideos = await Video.countDocuments(matchStage);
+  const hasMore = videos.length === limitNumber; // If full limit fetched, assume more exists
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        data: videos,
+        currentPage: lastVideoId ? null : 1, // Only relevant for first page
+        nextPage: hasMore ? (lastVideoId ? null : 2) : null, // Only relevant for first page
+        hasMore,
+        totalVideos,
+        lastVideoId: videos[videos.length - 1]._id, // Send last ID for cursor-based pagination
+      },
+      'Videos fetched successfully'
+    )
+  );
 });
+
+// publish a video.
 
 const publishAVideo = asyncHandler(async (req, res) => {
   // TODO: get video, upload to cloudinary, create video
@@ -105,11 +116,11 @@ const publishAVideo = asyncHandler(async (req, res) => {
   // 1. take the video file , title and description
   // 2. upload the video file to cloudinary
   // 3. upload the thumbnail to cloudinary
-  // delete the video file from the local storage
+  //    delete the video file from the local storage
   // 4. create a new video document in the database
   // 5. return the video document
   // 6. check if video is created successfully or not
-  // finaly return the video document in res.
+  //    finaly return the video document in res.
 
   try {
     if (!req.user._id) {
