@@ -1,6 +1,5 @@
 import mongoose, { isValidObjectId } from 'mongoose';
 import { Video } from '../models/video.model.js';
-import { User } from '../models/user.model.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import asyncHandler from '../utils/asyncHandler.js';
@@ -16,7 +15,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
     sortBy = 'views',
     sortType = 'desc',
     userId,
-    lastVideoId,
+    lastVideoId, // this will work as cursor
   } = req.query;
 
   const limitNumber = parseInt(limit, 10);
@@ -27,23 +26,37 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
   // Match Stage (Filter by query or user ID)
   const matchStage = {};
-  if (query) matchStage.title = { $regex: query, $options: 'i' };
-  if (userId) matchStage.owner = new mongoose.Types.ObjectId(userId);
+  if (query) matchStage.title = { $regex: query, $options: 'i' }; // Case-insensitive search
+  if (userId) matchStage.owner = new mongoose.Types.ObjectId(userId); // Filter by user ID
 
   // Cursor-based pagination (Fix for duplicate issue)
   if (lastVideoId) {
-    matchStage._id =
-      sortOrder === -1
-        ? { $lt: new mongoose.Types.ObjectId(lastVideoId) } // Fetch older videos
-        : { $gt: new mongoose.Types.ObjectId(lastVideoId) }; // Fetch newer videos
+    // Fetch the last video to get its sortBy and _id values
+    const lastVideo = await Video.findById(lastVideoId).select(sortBy + ' _id');
+    if (lastVideo) {
+      matchStage.$or = [
+        { [sortBy]: { [sortOrder === 1 ? '$gt' : '$lt']: lastVideo[sortBy] } },
+        {
+          [sortBy]: lastVideo[sortBy],
+          _id: {
+            [sortOrder === 1 ? '$gt' : '$lt']: new mongoose.Types.ObjectId(
+              lastVideoId
+            ),
+          },
+        },
+      ];
+    }
   }
 
   pipeline.push({ $match: matchStage });
 
-  // Sort Stage (Fix duplicate issues)
+  // Sort Stage (Crucial for preventing duplicates)
   pipeline.push({
-    $sort: { [sortBy]: sortOrder, _id: sortOrder }, // Sort by `views` and `_id`
+    $sort: { [sortBy]: sortOrder, _id: sortOrder }, // Sort by `sortBy` and then `_id`
   });
+
+  // Limit Stage (Apply limit before facet for efficiency)
+  pipeline.push({ $limit: limitNumber });
 
   // Lookup Owner Details (User Info)
   pipeline.push({
@@ -58,15 +71,28 @@ const getAllVideos = asyncHandler(async (req, res) => {
 
   pipeline.push({
     $addFields: {
-      owner: { $arrayElemAt: ['$owner', 0] },
+      owner: { $arrayElemAt: ['$owner', 0] }, // Unwind the owner array
     },
   });
 
-  // Pagination Limit (🔥 No `$skip` to prevent duplicate data)
-  pipeline.push({ $limit: limitNumber });
+  // Use $facet to get total count in a separate stage (after limiting for efficiency)
+  pipeline.push({
+    $facet: {
+      videos: [], // Videos are already limited
+      totalCount: [
+        {
+          $count: 'count',
+        },
+      ],
+    },
+  });
 
   // Execute aggregation
-  const videos = await Video.aggregate(pipeline);
+  const result = await Video.aggregate(pipeline);
+
+  // Extract videos and total count from the result
+  const videos = result[0].videos;
+  const totalVideos = result[0].totalCount[0]?.count || 0;
 
   // Handle case when no videos are found
   if (!videos.length) {
@@ -75,8 +101,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
         200,
         {
           data: [],
-          currentPage: null,
-          nextPage: null,
           hasMore: false,
           totalVideos: 0,
           lastVideoId: null,
@@ -86,17 +110,14 @@ const getAllVideos = asyncHandler(async (req, res) => {
     );
   }
 
-  // Fetch total video count for pagination info
-  const totalVideos = await Video.countDocuments(matchStage);
-  const hasMore = videos.length === limitNumber; // If full limit fetched, assume more exists
+  // Determine if more videos are available (we limited the result, so if we got the full limit, there might be more)
+  const hasMore = videos.length === limitNumber;
 
   return res.status(200).json(
     new ApiResponse(
       200,
       {
         data: videos,
-        currentPage: lastVideoId ? null : 1, // Only relevant for first page
-        nextPage: hasMore ? (lastVideoId ? null : 2) : null, // Only relevant for first page
         hasMore,
         totalVideos,
         lastVideoId: videos[videos.length - 1]._id, // Send last ID for cursor-based pagination
@@ -106,6 +127,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
   );
 });
 
+export default getAllVideos;
 // publish a video.
 
 const publishAVideo = asyncHandler(async (req, res) => {
