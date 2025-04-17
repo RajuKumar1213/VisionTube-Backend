@@ -117,7 +117,7 @@ const getAllVideos = asyncHandler(async (req, res) => {
     new ApiResponse(
       200,
       {
-        data: videos,
+        videos,
         hasMore,
         totalVideos,
         lastVideoId: videos[videos.length - 1]._id, // Send last ID for cursor-based pagination
@@ -127,7 +127,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
   );
 });
 
-export default getAllVideos;
 // publish a video.
 
 const publishAVideo = asyncHandler(async (req, res) => {
